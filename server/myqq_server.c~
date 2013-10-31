@@ -1,0 +1,647 @@
+#include "server_win.h"
+
+
+int statu = 1, opt = 1;
+
+//+++++++++++++查找还没有使用的连接状态数组++++++++++++++++++++++++
+void add_sockset(fd_set * sockset, int sockfd, int *user_link, int *userfd)
+{
+	int i;
+	FD_ZERO(sockset);
+	FD_SET(sockfd, sockset);
+	for (i = 0; i < MAX_CLIENT; i++) {
+		if (user_link[i] == 1) {
+			FD_SET(userfd[i], sockset);
+		}
+	}
+}
+
+//++++++++++++++++好友列表+++++++++++++++++
+GtkTreeModel *createModel()
+{
+	while (1) {
+		int unline;
+		int online;
+		char sql[300];
+		MYSQL *conn_ptr;
+
+		MYSQL_RES *result;
+		MYSQL_ROW row;
+
+		conn_ptr = mysql_init(NULL);	//连接初始化
+		conn_ptr = mysql_real_connect(conn_ptr, "localhost", "root", "123456", "myqq", 0, NULL, 0);
+		if (!conn_ptr) {
+			//char failed[15]="sqlfailed";
+			//write(k->fd,failed,strlen(failed));
+		} else {
+			sprintf(sql, "select count(*) as title from usermsg where userstatu=1");
+			//printf("%s\n",sql);
+			mysql_query(conn_ptr, sql);
+
+			result = mysql_store_result(conn_ptr);
+			row = mysql_fetch_row(result);
+
+			online = atoi(row[0]);
+			mysql_free_result(result);
+
+			sprintf(sql, "select count(*) as title from usermsg where userstatu=0");
+			//printf("%s\n",sql);
+			mysql_query(conn_ptr, sql);
+
+			result = mysql_store_result(conn_ptr);
+			row = mysql_fetch_row(result);
+
+			unline = atoi(row[0]);
+			mysql_free_result(result);
+		}
+
+		const gchar *files[] = { "./ico/apple-red.png", "./ico/apple-red.png",
+			"./ico/apple-red.png", "./ico/apple-red.png", "./ico/apple-red.png"
+		};
+
+		const gchar *file[] = { "./ico/gnome-gmush.png", "./ico/gnome-gmush.png",
+			"./ico/gnome-gmush.png", "./ico/gnome-gmush.png",
+			"./ico/gnome-gmush.png"
+		};
+
+		GtkWidget *cellView;
+		GdkPixbuf *pixbuf;
+		GtkTreeIter iter1, iter2;
+		GtkTreeStore *store;
+		gint i, j, s, k = 0;
+
+		char line[2][20];
+		memset(line, 0, 40);
+		strcpy(line[0], "在线好友");
+		strcpy(line[1], "不在线好友");
+
+		store = gtk_tree_store_new(2, GDK_TYPE_PIXBUF, G_TYPE_STRING);
+		cellView = gtk_cell_view_new();
+
+		for (i = 0; i < 2; i++) {
+
+			pixbuf = gdk_pixbuf_new_from_file(files[i], NULL);
+			gtk_tree_store_append(store, &iter1, NULL);
+			gtk_tree_store_set(store, &iter1, PIXBUF_COL, pixbuf, TEXT_COL, line[i], -1);
+			gdk_pixbuf_unref(pixbuf);
+
+			if (k == 0) {
+				sprintf(sql, "select username from usermsg where userstatu=1");
+				mysql_query(conn_ptr, sql);
+
+				result = mysql_store_result(conn_ptr);
+				row = mysql_fetch_row(result);
+
+				for (j = 0; j < online; j++) {
+					s = rand() % 5;
+					pixbuf = gdk_pixbuf_new_from_file(file[i], NULL);
+					//pixbuf = gtk_widget_render_icon(cellView,stocks[s],GTK_ICON_SIZE_BUTTON, NULL);
+					gtk_tree_store_append(store, &iter2, &iter1);
+
+					gtk_tree_store_set(store, &iter2, PIXBUF_COL, pixbuf, TEXT_COL, row[0], -1);
+					row = mysql_fetch_row(result);
+
+					k = 1;
+				}
+				//online=unline;
+				gdk_pixbuf_unref(pixbuf);
+			} else {
+				sprintf(sql, "select username from usermsg where userstatu=0");
+				mysql_query(conn_ptr, sql);
+				result = mysql_store_result(conn_ptr);
+				row = mysql_fetch_row(result);
+				for (j = 0; j < unline; j++) {
+					s = rand() % 5;
+					pixbuf = gdk_pixbuf_new_from_file(file[i], NULL);
+					//pixbuf = gtk_widget_render_icon(cellView,files[s],GTK_ICON_SIZE_BUTTON, NULL);
+					gtk_tree_store_append(store, &iter2, &iter1);
+
+					gtk_tree_store_set(store, &iter2, PIXBUF_COL, pixbuf, TEXT_COL, row[0], -1);
+					row = mysql_fetch_row(result);
+					gdk_pixbuf_unref(pixbuf);
+				}
+			}
+		}
+
+		return GTK_TREE_MODEL(store);
+	}
+}
+
+//+++++++++++++++++++++++++++++++++++++
+static void combochange_log(const char *fmt, char *msg)
+{
+	GtkTextIter iter;
+	GString *order_string;
+	GtkTextMark *tmp_mark;
+
+	GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(allwid.text_view));
+
+	gtk_text_buffer_get_end_iter(buffer, &iter);
+	gtk_text_buffer_insert(buffer, &iter, msg, -1);
+
+	order_string = g_string_new("\n");
+	gtk_text_buffer_insert(buffer, &iter, order_string->str, -1);
+	g_string_free(order_string, TRUE);
+
+//tmp_mark = gtk_text_buffer_create_mark (allwid.text_view, NULL, &iter, FALSE);
+//gtk_text_view_scroll_mark_onscreen (GTK_TEXT_VIEW (text_view), tmp_mark);
+//gtk_text_buffer_delete_mark (buffer, tmp_mark);
+
+//g_free (msg);
+}
+
+//+++++++++++++++用户登陆验证信息++++++++++++++++++++++
+
+void func_check(struct check *k)
+{
+
+	gdk_threads_enter();
+	char sql[300];
+	MYSQL *conn_ptr;
+
+	MYSQL_RES *result;	/*result buffer */
+	MYSQL_ROW row;		/*one row of the result */
+
+	conn_ptr = mysql_init(NULL);	//连接初始化
+	conn_ptr = mysql_real_connect(conn_ptr, "localhost", "root", "123456", "myqq", 0, NULL, 0);
+	if (!conn_ptr) {
+		char failed[15] = "sqlfailed";
+		write(k->fd, failed, strlen(failed));
+		usleep(1000);
+	} else {
+		sprintf(sql,
+			"select userid,userpwd,userstatu from usermsg where userid = '%s' and userpwd = '%s'",
+			k->id, k->pwd);
+		printf("%s\n", sql);
+		mysql_query(conn_ptr, sql);
+
+		if ((result = mysql_store_result(conn_ptr)) == NULL) {
+			fprintf(stderr, "Fail to get the result.\n");
+		}
+		row = mysql_fetch_row(result);	/*fetching each row */
+
+//              mysql_free_result(result);
+
+//              unsigned int mysql_ac;
+//              printf("mysql_ac=%lu\n",mysql_ac);
+//              mysql_ac=mysql_affected_rows(conn_ptr);
+//              printf("%ul\n",mysql_ac);
+		if (!strcmp(row[0], k->id) && !strcmp(row[1], k->pwd)
+		    && !atoi(row[2])) {
+			memset(sql, 0, 200);
+			sprintf(sql,
+				"select userip,userport,username from usermsg where userid = '%s' and userpwd = '%s'",
+				k->id, k->pwd);
+			mysql_query(conn_ptr, sql);
+			result = mysql_store_result(conn_ptr);
+			row = mysql_fetch_row(result);
+			if ((strcmp(row[0], k->ip) != 0)
+			    || (strcmp(row[1], k->port) != 0)) {
+				memset(sql, 0, 300);
+				sprintf(sql,
+					"update usermsg set userip='%s',userport='%s',userstatu=1 where userid = '%s' and userpwd = '%s'",
+					k->ip, k->port, k->id, k->pwd);
+				printf("%s\n", sql);
+				mysql_query(conn_ptr, sql);
+				char delu[100];
+				memset(delu, '\0', 100);
+				sprintf(delu, "delu:%s:%s:%s", k->id, k->ip, k->port);
+				for (j = 0; j < MAX_CLIENT; j++) {
+					if ((user_link[j] == 1)
+					    && (userfd[j] != k->fd)) {
+						write(userfd[j], delu, strlen(delu));
+						//printf("userfd%d=%d\n",j,userfd[j]);
+					}
+				}
+			} else {
+				memset(sql, 0, 300);
+				sprintf(sql,
+					"update usermsg set userstatu=1 where userid = '%s' and userpwd = '%s'",
+					k->id, k->pwd);
+				mysql_query(conn_ptr, sql);
+			}
+
+			char name[40];
+			strcpy(name, row[2]);
+			strcat(name, "  :已登陆");
+//      gdk_threads_enter();
+			combochange_log("%s", name);
+//s     gdk_threads_leave();
+
+			mysql_free_result(result);
+			memset(sql, 0, 300);
+			sprintf(sql, "select count(*) as title from usermsg");
+			mysql_query(conn_ptr, sql);
+			result = mysql_store_result(conn_ptr);
+			row = mysql_fetch_row(result);
+			printf("title=%s\n", row[0]);
+			char ucount[15];
+			sprintf(ucount, "ucount:%s", row[0]);
+			write(k->fd, ucount, strlen(ucount));
+			usleep(1000);
+			mysql_free_result(result);
+			sprintf(sql,
+				"select username,userid,userip,userport,userstatu from usermsg where userid = '%s' and userpwd = '%s'",
+				k->id, k->pwd);
+			mysql_query(conn_ptr, sql);
+			result = mysql_store_result(conn_ptr);
+			row = mysql_fetch_row(result);
+			int i;
+			char aaaa[200];
+			memset(aaaa, 0, 200);
+			strcpy(aaaa, "sigin");
+			for (i = 0; i < 5; i++) {
+				strcat(aaaa, ":");
+				strcat(aaaa, row[i]);
+			}
+			write(k->fd, aaaa, strlen(aaaa));
+			usleep(1000);
+			mysql_free_result(result);
+
+			memset(sql, 0, 300);
+			sprintf(sql,
+				"select username,userid,userip,userport,userstatu from usermsg where userid != '%s'",
+				k->id);
+			mysql_query(conn_ptr, sql);
+			result = mysql_store_result(conn_ptr);
+			while ((row = mysql_fetch_row(result)) != NULL) {	/*fetching each row */
+				int i;
+				char sigin[200];
+				memset(sigin, 0, 200);
+				strcpy(sigin, "sigin");
+				for (i = 0; i < 5; i++) {
+					strcat(sigin, ":");
+					strcat(sigin, row[i]);
+				}
+				sigin[strlen(sigin)] = '\0';
+				write(k->fd, sigin, strlen(sigin));
+				usleep(1000);
+			}
+			char over[7] = "over";
+			write(k->fd, over, strlen(over));
+			mysql_free_result(result);
+			printf("on\n");
+		} else {
+			printf("ut=\n");
+			char ut[10] = "chkoff";
+			printf("ut=%s\n", ut);
+			write(k->fd, ut, strlen(ut));
+		}
+		printf("ut111=\n");
+//      printf("mysql_ac=%lu\n",mysql_ac);
+		mysql_close(conn_ptr);
+	}
+//sleep(20);
+	printf("check_id: %s\n", k->id);
+	printf("check_pwd: %s\n", k->pwd);
+	printf("check_fd: %d\n", k->fd);
+	gdk_threads_leave();
+}
+
+/*//+++++++++++++++++++++++++++++++++++++
+void create_mysql (void)
+{
+MYSQL *conn_ptr;
+conn_ptr=mysql_init(NULL); 	//连接初始化
+	if(!conn_ptr)
+	{
+	fprintf(stderr, "mysql_init failed\n");
+	return EXIT_FAILURE;
+	}
+	conn_ptr = mysql_real_connect(conn_ptr, "localhost", "root","123456","myqq", 0, NULL, 0);
+	//建立实际连接
+	if(conn_ptr)
+	{
+	//	printf("Connection 成功\n");
+	}
+	else
+	{
+	printf("Connection 失败\n");
+	}
+return conn_ptr;
+}
+*/
+
+//++++++++++++++添加用户+++++++++++++++++++++++
+void func_adduser(struct newuser *k)
+{
+	gdk_threads_enter();
+	char sql[300];
+	MYSQL *conn_ptr;
+	conn_ptr = mysql_init(NULL);	//连接初始化
+	conn_ptr = mysql_real_connect(conn_ptr, "localhost", "root", "123456", "myqq", 0, NULL, 0);
+	if (!conn_ptr) {
+		char failed[15] = "sqlfailed";
+		write(k->addfd, failed, strlen(failed));
+	} else {
+		sprintf(sql,
+			"insert into usermsg values('%s','%s','%s','%s','%s',%d,'%s')",
+			k->addname, k->addid, k->addpwd, k->addip, k->addport, k->addstatu, k->addmail);
+		printf("%s\n", sql);
+		mysql_query(conn_ptr, sql);
+		unsigned int mysql_ac;
+		printf("注册中的mysql_ac=%u\n", mysql_ac);
+		mysql_ac = mysql_affected_rows(conn_ptr);
+		printf("注册中的%u\n", mysql_ac);
+		if (mysql_ac == 1) {
+			char ut[5] = "on";
+			write(k->addfd, ut, strlen(ut));
+			char name[40];
+			strcpy(name, k->addname);
+			strcat(name, "  :已注册");
+//      gdk_threads_enter();
+			combochange_log("%s", name);
+//s     gdk_threads_leave();
+		} else {
+			char ut[5] = "off";
+			write(k->addfd, ut, strlen(ut));
+		}
+//      printf("mysql_ac=%lu\n",mysql_ac);
+		mysql_close(conn_ptr);
+	}
+	gdk_threads_leave();
+}
+
+//+++++++++++++++++++++++++++++++++++++
+int user_free(int user_link[MAX_CLIENT])
+{
+	int i = 0;
+	while ((user_link[i] != 0) && (i < MAX_CLIENT))
+		i++;
+	if (i == MAX_CLIENT)
+		return (-1);
+	return (i);
+}
+
+//+++++++++++++++退出++++++++++++++++++++++
+void func_quit(char ipip[40])
+{
+	gdk_threads_enter();
+	char ip[25];
+	char port[10];
+	int fd;
+	char afd[5];
+	char *token;
+	token = strtok(ipip, ":");
+	strcpy(ip, token);
+	token = strtok(NULL, ":");
+	strcpy(port, token);
+	token = strtok(NULL, ":");
+
+	char quit[40];
+	strcpy(quit, "quit");
+	strcat(quit, ":");
+	strcat(quit, ip);
+	strcat(quit, ":");
+	strcat(quit, port);
+	printf("quit=%s\n", quit);
+	fd = atoi(token);
+	printf("fd=%d\n", fd);
+	char sql[300];
+	MYSQL *conn_ptr;
+	MYSQL_RES *result;	/*result buffer */
+	MYSQL_ROW row;		/*one row of the result */
+
+	conn_ptr = mysql_init(NULL);	//连接初始化
+	conn_ptr = mysql_real_connect(conn_ptr, "localhost", "root", "123456", "myqq", 0, NULL, 0);
+	if (!conn_ptr) {
+		char failed[15] = "sqlfailed";
+		write(fd, failed, strlen(failed));
+	} else {
+		sprintf(sql, "update usermsg set userstatu=0 where userip='%s' and userport='%s'", ip, port);
+		mysql_query(conn_ptr, sql);
+		for (j = 0; j < MAX_CLIENT; j++) {
+			if ((user_link[j] == 1) && (userfd[j] != fd)) {
+				write(userfd[j], quit, strlen(quit));
+				//printf("userfd%d=%d\n",j,userfd[j]);
+			}
+		}
+		memset(sql, 0, 300);
+		sprintf(sql, "select username from usermsg where userip='%s' and userport='%s'", ip, port);
+		mysql_query(conn_ptr, sql);
+		result = mysql_store_result(conn_ptr);
+		row = mysql_fetch_row(result);
+		mysql_free_result(result);
+		char name[20];
+		strcpy(name, row[0]);
+		strcat(name, "  :已退出");
+//      gdk_threads_enter();
+		combochange_log("%s", name);
+//s     gdk_threads_leave();
+	}
+	gdk_threads_leave();
+}
+
+//+++++++++++++++++++++++++++++++++++++
+void go_to(void)
+{
+	for (;;) {
+		n = select(maxfd, &sockset, NULL, NULL, NULL);
+		if (FD_ISSET(sockfd, &sockset)
+		    && (userCount = user_free(user_link)) >= 0) {
+			new_sockfd = accept(sockfd, (struct sockaddr *)
+					    &client_address[userCount], &cli_len);
+			if (new_sockfd < 0) {
+				user_link[userCount] = 0;
+				printf("无新的连接!\n");
+			} else {
+				printf("已有新连接\n");
+				printf("userCount=%d\n", userCount);
+				printf("new_sockfd=%d\n", new_sockfd);
+				user_link[userCount] = 1;
+				userfd[userCount] = new_sockfd;
+				FD_SET(new_sockfd, &sockset);
+				maxfd = max(maxfd, new_sockfd + 1);
+				printf("userfd[userCount]=%d\n", userfd[userCount]);
+				printf("maxfd=%d\n", maxfd);
+			}
+			add_sockset(&sockset, sockfd, user_link, userfd);
+			continue;
+		}
+		for (i = 0; i < MAX_CLIENT; i++) {
+			if ((user_link[i] == 1)
+			    && (FD_ISSET(userfd[i], &sockset))) {
+				printf("读前\n");
+				readcount = read(userfd[i], message, MAX_LINE);
+				printf("读后\n");
+
+				if (readcount == 0) {
+					//当客户端关闭程序时会发一个0过来
+					printf("客户%d关闭\n", userfd[i]);
+					user_link[i] = 0;
+					FD_CLR(userfd[i], &sockset);
+
+					char ipip[40];
+					char por[10];
+					char fd[5];
+					memset(ipip, 0, 40);
+					sprintf(ipip, "%s",
+						inet_ntop(AF_INET, &client_address[i].sin_addr, str, sizeof(str)));
+					strcat(ipip, ":");
+					sprintf(por, "%d", ntohs(client_address[i].sin_port));
+					strcat(ipip, por);
+					strcat(ipip, ":");
+					sprintf(fd, "%d", userfd[i]);
+					strcat(ipip, fd);
+					printf("ipip=%s\n", ipip);
+					g_thread_create(G_THREAD_FUNC(func_quit), ipip, FALSE, NULL);
+					bzero((char *)&client_address[i], sizeof(client_address[i]));
+
+					//userfd[i]=NULL;
+				} else if (readcount > 0) {
+					char *token;
+					message[readcount] = '\0';
+					token = strtok(message, ":");
+//判断如果发过来的是注册字符串进行賳值，发来的顺序不能换，
+					if (strcmp(token, "useradd") == 0) {
+						printf("进入sueradd:\n");
+						//第一个发过来的是昵称
+						token = strtok(NULL, ":");
+						printf("token=%s\n", token);
+						strcpy(newuser[i].addname, token);
+						printf("newuser[i].name:%s\n", newuser[i].addname);
+
+						//第二个发过来的是帐号ID
+						token = strtok(NULL, ":");
+						strcpy(newuser[i].addid, token);
+						printf("token=%s\n", token);
+
+						//第三个发过来的是密码
+						token = strtok(NULL, ":");
+						strcpy(newuser[i].addpwd, token);
+						printf("token=%s\n", token);
+						//第一个发过来的是电子邮件
+						token = strtok(NULL, ":");
+						strcpy(newuser[i].addmail, token);
+						printf("token=%s\n", token);
+						//向存放IP地址的结构体，赋值
+						sprintf(newuser[i].addip, "%s",
+							inet_ntop(AF_INET,
+								  &client_address[i].sin_addr, str, sizeof(str)));
+						printf("token=%s\n", newuser[i].addip);
+						sprintf(newuser[i].addport, "%d", ntohs(client_address[i].sin_port));
+						printf("token=%s\n", newuser[i].addport);
+						newuser[i].addfd = userfd[i];
+						newuser[i].addstatu = 0;
+						printf("sueradd:\n");
+						g_thread_create(G_THREAD_FUNC(func_adduser), &newuser[i], FALSE, NULL);
+						//gdk_threads_enter();
+						//func_adduser();
+						//gdk_threads_leave();
+					}
+//用户登陆时处理验证信息
+					if (strcmp(token, "usercheck") == 0) {
+						token = strtok(NULL, ":");
+						strcpy(acheck[i].id, token);
+						token = strtok(NULL, ":");
+						strcpy(acheck[i].pwd, token);
+
+						sprintf(acheck[i].ip, "%s",
+							inet_ntop(AF_INET,
+								  &client_address[i].sin_addr, str, sizeof(str)));
+						sprintf(acheck[i].port, "%d", ntohs(client_address[i].sin_port));
+
+						acheck[i].fd = userfd[i];
+						g_thread_create(G_THREAD_FUNC(func_check), &acheck[i], FALSE, NULL);
+
+					}
+					if (strcmp(token, "accet") == 0) {
+						printf("%s\n", token);
+						write(userfd[i], token, strlen(token));
+					}
+
+				}
+			}
+		}
+		add_sockset(&sockset, sockfd, user_link, userfd);
+	}
+}
+
+//+++++++++++++++++++++++++++++++++++++
+//函数 最大文件符
+
+int max(int a, int b)
+{
+	return a > b ? a : b;
+}
+
+//函数创建一个文件并绑定
+int initial_server(gchar * server_ip, gint server_port)
+{
+	int sockfd;
+	struct sockaddr_in server_address;
+	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+		//printf("服务器不能创建套接字!\n");
+		fflush(stdout);
+		return (0);
+	}
+	bzero((char *)&server_address, sizeof(server_address));
+	server_address.sin_family = AF_INET;
+	server_address.sin_addr.s_addr = inet_addr(server_ip);
+	server_address.sin_port = htons(server_port);
+	if (bind(sockfd, (struct sockaddr *)&server_address, sizeof(server_address)) < 0) {
+		//printf("服务器不能绑定本地IP地址!\n");
+		fflush(stdout);
+		return (0);
+	}
+	statu = 0;
+	return (sockfd);
+}
+
+//+++++++++++++++++++++++++++++++++++++
+
+void go_to_broadcast(void)
+{
+	gchar *message_txt = (gchar *) gtk_entry_get_text(GTK_ENTRY(allwid.message));
+	strcpy(sys, "系统广播：");
+	strcat(sys, message_txt);
+	gdk_threads_enter();
+	combochange_log("%s", sys);
+	gdk_threads_leave();
+}
+
+//+++++++++++++++++++++++++++++++++++++
+void button_message_clicked(GtkWidget * button, gpointer data)
+{
+	if (sockfd) {
+		g_thread_create(G_THREAD_FUNC(go_to_broadcast), NULL, FALSE, NULL);
+		int j;
+		gchar *message_txt = (gchar *) gtk_entry_get_text(GTK_ENTRY(allwid.message));
+		strcpy(sys_click, "系统广播：");
+		strcat(sys_click, message_txt);
+		for (j = 0; j < MAX_CLIENT; j++) {
+			if (user_link[j] == 1) {
+				write(userfd[j], sys_click, strlen(sys_click));
+				//printf("userfd%d=%d\n",j,userfd[j]);
+			}
+		}
+	}
+}
+
+//+++++++++++++++++++++++++++++++++++++
+void button_start_clicked(GtkWidget * button, gpointer data)
+{
+	struct widget_active *tc = &allwid;
+//服务器IP地址
+	gchar *server_ip = (gchar *) gtk_entry_get_text(GTK_ENTRY(tc->ip));
+//监听端口号
+	gchar *server_port = (gchar *) gtk_entry_get_text(GTK_ENTRY(tc->port));
+	printf("%s\n", server_ip);
+	printf("%d\n", atoi(server_port));
+	if (statu && (sockfd == 0)) {
+//已经创建一个文件描述，并绑定
+		sockfd = initial_server(server_ip, atoi(server_port));
+		setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+		printf("socked=%d\n", sockfd);
+		listen(sockfd, MAX_CLIENT);
+		cli_len = sizeof(client_address);
+		for (i = 0; i < MAX_CLIENT; i++)
+			user_link[i] = 0;
+		userCount = 0;
+		FD_ZERO(&sockset);
+		FD_SET(sockfd, &sockset);
+		maxfd = max(maxfd, sockfd + 1);
+		g_thread_create(G_THREAD_FUNC(go_to), NULL, FALSE, NULL);
+	}
+
+}

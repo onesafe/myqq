@@ -1,0 +1,311 @@
+
+#include <gtk/gtk.h>
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <mysql/mysql.h>
+
+#define MAX_CLIENT 10
+#define MAX_LINE 1000
+#define MAX_NAME 100
+
+#define G_THREAD_FUNC(f) ((GThreadFunc) (f))
+
+/*
+	int sockfd, new_sockfd, user_link[MAX_CLIENT], userfd[MAX_CLIENT];
+	int userCount, length, i, j, maxfd = 0;
+	char username[MAX_CLIENT][MAX_NAME], line[MAX_LINE];
+	unsigned int cli_len;
+	struct sockaddr_in client_address;
+	fd_set sockset;
+*/
+char str[INET_ADDRSTRLEN];
+
+int readcount, n;
+int sockfd, new_sockfd, i, j;
+int maxfd, userCount, user_link[MAX_CLIENT], userfd[MAX_CLIENT];
+unsigned int cli_len;
+fd_set sockset;
+struct sockaddr_in client_address[MAX_CLIENT];
+char message[MAX_LINE], sys[MAX_LINE], sys_click[MAX_LINE];
+
+
+struct check {
+	char id[20];
+	char pwd[20];
+	char ip[25];
+	char port[10];
+	int fd;
+};
+
+struct check acheck[MAX_CLIENT];
+struct newuser {
+	char addname[20];
+	char addid[20];
+	char addpwd[20];
+	char addip[25];
+	char addport[10];
+	char addmail[50];
+	int addfd;
+	int addstatu;
+};
+struct newuser newuser[MAX_CLIENT];
+
+
+enum {
+	PIXBUF_COL,
+	TEXT_COL
+};
+
+struct widget_active {
+	GtkEntry * ip;
+	GtkEntry * port;
+	GtkWidget *listfrend;
+	GtkWidget *text_view;
+	GtkEntry *message;
+};
+
+struct widget_active allwid;
+
+void button_start_clicked(GtkWidget * button, gpointer data);
+void button_message_clicked(GtkWidget * button, gpointer data);
+GtkTreeModel *createModel();
+
+GtkWidget *create_window(void)
+{
+	GtkWidget *window_server;
+	GtkWidget *hbox1;
+	GtkWidget *vbox1;
+	GtkWidget *hbox2;
+	GtkWidget *asd;
+	GtkWidget *entry_server_ip;
+	GtkWidget *label2;
+	GtkWidget *entry_server_port;
+	GtkWidget *label3;
+	GtkWidget *button_start;
+	GtkWidget *alignment1;
+	GtkWidget *hbox5;
+	GtkWidget *image1;
+	GtkWidget *label11;
+	GtkWidget *label4;
+	GtkWidget *button_stop;
+	GtkWidget *alignment2;
+	GtkWidget *hbox6;
+	GtkWidget *image2;
+	GtkWidget *label12;
+	GtkWidget *label5;
+	GtkWidget *label6;
+	GtkWidget *hbox3;
+	GtkWidget *scrolledwindow1;
+	GtkWidget *treeview_listfrend;
+	GtkWidget *vbox2;
+	GtkWidget *scrolledwindow2;
+	GtkWidget *textview_news;
+	GtkWidget *hbox4;
+	GtkWidget *label7;
+	GtkWidget *entry_message;
+	GtkWidget *label8;
+	GtkWidget *button_message;
+	GtkWidget *label9;
+	GtkWidget *label10;
+
+	GtkCellRenderer *renderer;
+	GtkTreeViewColumn *column;
+
+	window_server = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+	gtk_widget_set_size_request(window_server, 439, -1);
+	gtk_window_set_title(GTK_WINDOW(window_server),
+			     "\345\244\232\344\272\272\350\201\212\345\244\251\346\234\215\345\212\241\345\231\250");
+	gtk_window_set_resizable(GTK_WINDOW(window_server), FALSE);
+	g_signal_connect(G_OBJECT(window_server), "delete_event", G_CALLBACK(gtk_main_quit), NULL);
+	hbox1 = gtk_hbox_new(FALSE, 0);
+	gtk_widget_show(hbox1);
+	gtk_container_add(GTK_CONTAINER(window_server), hbox1);
+
+	vbox1 = gtk_vbox_new(FALSE, 0);
+	gtk_widget_show(vbox1);
+	gtk_box_pack_start(GTK_BOX(hbox1), vbox1, TRUE, TRUE, 0);
+
+	hbox2 = gtk_hbox_new(FALSE, 0);
+	gtk_widget_show(hbox2);
+	gtk_box_pack_start(GTK_BOX(vbox1), hbox2, TRUE, TRUE, 0);
+
+	asd = gtk_label_new(" IP: ");
+	gtk_widget_show(asd);
+	gtk_box_pack_start(GTK_BOX(hbox2), asd, FALSE, FALSE, 0);
+
+//eytry_server_ip文本框
+
+	entry_server_ip = gtk_entry_new();
+	gtk_widget_show(entry_server_ip);
+	gtk_box_pack_start(GTK_BOX(hbox2), entry_server_ip, TRUE, TRUE, 0);
+	gtk_entry_set_max_length(GTK_ENTRY(entry_server_ip), 16);
+	gtk_entry_set_invisible_char(GTK_ENTRY(entry_server_ip), 8226);
+
+	label2 = gtk_label_new("\347\253\257\345\217\243\345\217\267\357\274\232");
+	gtk_widget_show(label2);
+	gtk_box_pack_start(GTK_BOX(hbox2), label2, FALSE, FALSE, 0);
+
+//entry_port文本框
+
+	entry_server_port = gtk_entry_new();
+	gtk_widget_show(entry_server_port);
+	gtk_box_pack_start(GTK_BOX(hbox2), entry_server_port, TRUE, TRUE, 0);
+	gtk_entry_set_max_length(GTK_ENTRY(entry_server_port), 5);
+	gtk_entry_set_invisible_char(GTK_ENTRY(entry_server_port), 8226);
+
+	label3 = gtk_label_new(" ");
+	gtk_widget_show(label3);
+	gtk_box_pack_start(GTK_BOX(hbox2), label3, FALSE, FALSE, 0);
+
+//启动按钮 button_start
+
+	button_start = gtk_button_new();
+	gtk_widget_show(button_start);
+	gtk_box_pack_start(GTK_BOX(hbox2), button_start, FALSE, FALSE, 0);
+
+	alignment1 = gtk_alignment_new(0.5, 0.5, 0, 0);
+	gtk_widget_show(alignment1);
+	gtk_container_add(GTK_CONTAINER(button_start), alignment1);
+
+	hbox5 = gtk_hbox_new(FALSE, 2);
+	gtk_widget_show(hbox5);
+	gtk_container_add(GTK_CONTAINER(alignment1), hbox5);
+
+	image1 = gtk_image_new_from_stock("gtk-yes", GTK_ICON_SIZE_BUTTON);
+	gtk_widget_show(image1);
+	gtk_box_pack_start(GTK_BOX(hbox5), image1, FALSE, FALSE, 0);
+
+	label11 = gtk_label_new_with_mnemonic("\345\274\200\345\220\257 ");
+	gtk_widget_show(label11);
+	gtk_box_pack_start(GTK_BOX(hbox5), label11, FALSE, FALSE, 0);
+
+	label4 = gtk_label_new("");
+	gtk_widget_show(label4);
+	gtk_box_pack_start(GTK_BOX(hbox2), label4, FALSE, FALSE, 0);
+
+//停止按钮button_stop
+
+	button_stop = gtk_button_new();
+	gtk_widget_show(button_stop);
+	gtk_box_pack_start(GTK_BOX(hbox2), button_stop, FALSE, FALSE, 0);
+
+	alignment2 = gtk_alignment_new(0.5, 0.5, 0, 0);
+	gtk_widget_show(alignment2);
+	gtk_container_add(GTK_CONTAINER(button_stop), alignment2);
+
+	hbox6 = gtk_hbox_new(FALSE, 2);
+	gtk_widget_show(hbox6);
+	gtk_container_add(GTK_CONTAINER(alignment2), hbox6);
+
+	image2 = gtk_image_new_from_stock("gtk-no", GTK_ICON_SIZE_BUTTON);
+	gtk_widget_show(image2);
+	gtk_box_pack_start(GTK_BOX(hbox6), image2, FALSE, FALSE, 0);
+
+	label12 = gtk_label_new_with_mnemonic(" \345\205\263\351\227\255 ");
+	gtk_widget_show(label12);
+	gtk_box_pack_start(GTK_BOX(hbox6), label12, FALSE, FALSE, 0);
+
+	label5 = gtk_label_new(" ");
+	gtk_widget_show(label5);
+	gtk_box_pack_start(GTK_BOX(hbox2), label5, FALSE, FALSE, 0);
+
+	label6 = gtk_label_new("");
+	gtk_widget_show(label6);
+	gtk_box_pack_start(GTK_BOX(vbox1), label6, FALSE, FALSE, 0);
+
+	hbox3 = gtk_hbox_new(FALSE, 0);
+	gtk_widget_show(hbox3);
+	gtk_box_pack_start(GTK_BOX(vbox1), hbox3, TRUE, TRUE, 0);
+
+	scrolledwindow1 = gtk_scrolled_window_new(NULL, NULL);
+	gtk_widget_show(scrolledwindow1);
+	gtk_box_pack_start(GTK_BOX(hbox3), scrolledwindow1, TRUE, TRUE, 0);
+	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolledwindow1), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+	gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(scrolledwindow1), GTK_SHADOW_IN);
+
+//左边好友列表
+
+	treeview_listfrend = gtk_tree_view_new_with_model(createModel());
+	gtk_widget_show(treeview_listfrend);
+	gtk_container_add(GTK_CONTAINER(scrolledwindow1), treeview_listfrend);
+	gtk_widget_set_size_request(treeview_listfrend, 177, 369);
+
+//treeView = gtk_tree_view_new_with_model(createModel());
+
+	renderer = gtk_cell_renderer_pixbuf_new();
+	column = gtk_tree_view_column_new_with_attributes("好友列表", renderer, "pixbuf", PIXBUF_COL, NULL);
+	gtk_tree_view_append_column(GTK_TREE_VIEW(treeview_listfrend), column);
+
+	renderer = gtk_cell_renderer_text_new();
+	column = gtk_tree_view_column_new_with_attributes("            ", renderer, "text", TEXT_COL, NULL);
+	gtk_tree_view_append_column(GTK_TREE_VIEW(treeview_listfrend), column);
+
+	vbox2 = gtk_vbox_new(FALSE, 0);
+	gtk_widget_show(vbox2);
+	gtk_box_pack_start(GTK_BOX(hbox3), vbox2, TRUE, TRUE, 0);
+
+	scrolledwindow2 = gtk_scrolled_window_new(NULL, NULL);
+	gtk_widget_show(scrolledwindow2);
+	gtk_box_pack_start(GTK_BOX(vbox2), scrolledwindow2, TRUE, TRUE, 0);
+	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolledwindow2), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+	gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(scrolledwindow2), GTK_SHADOW_IN);
+
+//右边消息窗口
+
+	textview_news = gtk_text_view_new();
+	gtk_widget_show(textview_news);
+	gtk_container_add(GTK_CONTAINER(scrolledwindow2), textview_news);
+	gtk_widget_set_size_request(textview_news, -1, 356);
+
+	hbox4 = gtk_hbox_new(FALSE, 0);
+	gtk_widget_show(hbox4);
+	gtk_box_pack_start(GTK_BOX(vbox2), hbox4, TRUE, TRUE, 0);
+
+	label7 = gtk_label_new("\347\263\273\347\273\237\346\266\210\346\201\257");
+	gtk_widget_show(label7);
+	gtk_box_pack_start(GTK_BOX(hbox4), label7, FALSE, FALSE, 0);
+
+//系统广播文件框
+
+	entry_message = gtk_entry_new();
+	gtk_widget_show(entry_message);
+	gtk_box_pack_start(GTK_BOX(hbox4), entry_message, TRUE, TRUE, 0);
+	gtk_entry_set_invisible_char(GTK_ENTRY(entry_message), 8226);
+
+	label8 = gtk_label_new("");
+	gtk_widget_show(label8);
+	gtk_box_pack_start(GTK_BOX(hbox4), label8, FALSE, FALSE, 0);
+
+//系统广播按钮
+
+	button_message = gtk_button_new_with_mnemonic("\345\271\277\346\222\255\346\266\210\346\201\257");
+	gtk_widget_show(button_message);
+	gtk_box_pack_start(GTK_BOX(hbox4), button_message, FALSE, FALSE, 0);
+
+	label9 = gtk_label_new("");
+	gtk_widget_show(label9);
+	gtk_box_pack_start(GTK_BOX(hbox4), label9, FALSE, FALSE, 0);
+
+	label10 = gtk_label_new("");
+	gtk_widget_show(label10);
+	gtk_box_pack_start(GTK_BOX(vbox1), label10, FALSE, FALSE, 0);
+
+	allwid.ip = GTK_ENTRY(entry_server_ip);
+	allwid.port = GTK_ENTRY(entry_server_port);
+	allwid.listfrend = treeview_listfrend;
+	allwid.text_view = textview_news;
+	allwid.message = GTK_ENTRY(entry_message);
+
+//所有系统按钮调用
+	g_signal_connect(G_OBJECT(button_start), "clicked", G_CALLBACK(button_start_clicked), NULL);
+	g_signal_connect(G_OBJECT(button_message), "clicked", G_CALLBACK(button_message_clicked), NULL);
+
+	return window_server;
+}

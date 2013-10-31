@@ -1,0 +1,80 @@
+
+#include <gtk/gtk.h>
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <mysql/mysql.h>
+
+#define MAX_CLIENT 10
+#define MAX_LINE 1000
+#define MAX_NAME 100
+
+#define G_THREAD_FUNC(f) ((GThreadFunc) (f))
+
+/*
+	int sockfd, new_sockfd, user_link[MAX_CLIENT], userfd[MAX_CLIENT];
+	int userCount, length, i, j, maxfd = 0;
+	char username[MAX_CLIENT][MAX_NAME], line[MAX_LINE];
+	unsigned int cli_len;
+	struct sockaddr_in client_address;
+	fd_set sockset;
+*/
+char str[INET_ADDRSTRLEN];
+
+int readcount, n;
+int sockfd, new_sockfd, i, j;
+int maxfd, userCount, user_link[MAX_CLIENT], userfd[MAX_CLIENT];
+unsigned int cli_len;
+fd_set sockset;
+struct sockaddr_in client_address[MAX_CLIENT];
+char message[MAX_LINE], sys[MAX_LINE], sys_click[MAX_LINE];
+
+struct check {
+	char id[20];
+	char pwd[20];
+	char ip[25];
+	char port[10];
+	int fd;
+};
+
+struct check acheck[MAX_CLIENT];
+struct newuser {
+	char addname[20];
+	char addid[20];
+	char addpwd[20];
+	char addip[25];
+	char addport[10];
+	char addmail[50];
+	int addfd;
+	int addstatu;
+};
+struct newuser newuser[MAX_CLIENT];
+
+enum {
+	PIXBUF_COL,
+	TEXT_COL
+};
+
+struct widget_active {
+	GtkEntry *ip;
+	GtkEntry *port;
+	GtkWidget *listfrend;
+	GtkWidget *text_view;
+	GtkEntry *message;
+};
+
+struct widget_active allwid;
+
+GtkTreeStore *store1;
+
+void button_start_clicked(GtkWidget * button, gpointer data);
+void button_message_clicked(GtkWidget * button, gpointer data);
+
+GtkTreeModel *createModel();
+GtkWidget *create_window(void);
